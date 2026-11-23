@@ -1,20 +1,27 @@
-name: Windows distribution
+name: Windows installer and portable package
 on:
   push:
     branches: [codex/windows-distribution]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inspect:
+  package:
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect sources
+        with:
+          persist-credentials: false
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - name: Build, database CRUD, forms, restart and installer tests
+        shell: pwsh
+        run: ./packaging/build.ps1 -Kind Cafe
+      - name: Publish downloadable test packages
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $archive = Get-ChildItem -File -Filter '*.rar' | Select-Object -First 1
-          7z x $archive.FullName -osource -y
-          if ($LASTEXITCODE) { throw 'Archive extraction failed' }
-          Get-ChildItem source -Recurse -File | Where-Object { $_.Extension -in '.csproj','.config','.sql','.bacpac','.mdf' } | Select-Object FullName,Length | Format-Table -AutoSize
-          Get-ChildItem source -Recurse -File | Where-Object { $_.Extension -in '.csproj','.config','.sql' } | ForEach-Object { Write-Output $_.FullName; Get-Content -LiteralPath $_.FullName }
-          Get-ChildItem source -Recurse -Filter '*.cs' | Where-Object Name -notlike '*.Designer.cs' | ForEach-Object { Write-Output $_.FullName; Get-Content -LiteralPath $_.FullName }
+          $tag = "windows-$env:GITHUB_RUN_ID"
+          gh release create $tag (Get-ChildItem build -File | Where-Object Extension -in '.exe','.zip','.txt' | Select-Object -ExpandProperty FullName) --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'Windows installer and portable package' --notes 'Windows x64 test distribution. Release build, new local database, CRUD, restart, UI opening and installed EXE checks passed. Interactive user acceptance pending. First launch creates your own administrator account.'
+          if ($LASTEXITCODE) { throw 'Release upload failed' }
