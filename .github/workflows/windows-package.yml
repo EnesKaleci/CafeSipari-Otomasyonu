@@ -1,0 +1,20 @@
+name: Windows distribution
+on:
+  push:
+    branches: [codex/windows-distribution]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect sources
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -File -Filter '*.rar' | Select-Object -First 1
+          7z x $archive.FullName -osource -y
+          if ($LASTEXITCODE) { throw 'Archive extraction failed' }
+          Get-ChildItem source -Recurse -File | Where-Object { $_.Extension -in '.csproj','.config','.sql','.bacpac','.mdf' } | Select-Object FullName,Length | Format-Table -AutoSize
+          Get-ChildItem source -Recurse -File | Where-Object { $_.Extension -in '.csproj','.config','.sql' } | ForEach-Object { Write-Output $_.FullName; Get-Content -LiteralPath $_.FullName }
+          Get-ChildItem source -Recurse -Filter '*.cs' | Where-Object Name -notlike '*.Designer.cs' | ForEach-Object { Write-Output $_.FullName; Get-Content -LiteralPath $_.FullName }
